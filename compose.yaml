@@ -52,9 +52,9 @@ services:
     volumes:
       - ./ops/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
+    # Compose needs a writable root filesystem to mount an environment-backed secret.
     secrets: [broker_metrics_token]
     networks: [monitoring]
-    read_only: true
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
 
