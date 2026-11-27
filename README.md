@@ -49,6 +49,8 @@ Use the returned job ID with `GET /jobs/{id}`. Use the job's `submitted` time an
 
 ## HTTP API
 
+Open [Swagger UI](http://127.0.0.1:8080/docs/) to view and try the routes, or download the [OpenAPI JSON](http://127.0.0.1:8080/openapi.json). In Swagger, select **Authorize** and paste the raw `BROKER_API_TOKEN` into `apiToken`. Use the separate `BROKER_METRICS_TOKEN` for `metricsToken`. Swagger adds the `Bearer` prefix.
+
 | Request | Behavior |
 |---|---|
 | `POST /jobs` | Requires an `Idempotency-Key`. Returns `201` for a new job, `200` with the original ID for a retry, or `409` when the same team/key has a different payload. |
