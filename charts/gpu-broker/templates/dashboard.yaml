@@ -1,0 +1,11 @@
+{{- if .Values.grafanaDashboard.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "gpu-broker.name" . }}-dashboard
+  labels:
+    grafana_dashboard: "1"
+data:
+  gpu-broker.json: |
+    {{- .Files.Get "dashboards/broker.json" | nindent 4 }}
+{{- end }}

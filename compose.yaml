@@ -1,0 +1,92 @@
+services:
+  broker:
+    build: .
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      BROKER_API_TOKEN: ${BROKER_API_TOKEN:?Set BROKER_API_TOKEN}
+      BROKER_METRICS_TOKEN: ${BROKER_METRICS_TOKEN:?Set BROKER_METRICS_TOKEN}
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_USER: broker
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_BROKER_PASSWORD:?Set CLICKHOUSE_BROKER_PASSWORD}
+      CLICKHOUSE_ALLOW_HTTP: "1"
+    volumes:
+      - broker-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks: [archive, monitoring]
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8080/readyz', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:26.8.48.11@sha256:e7e582227e531fddb91be850643999603332ee3199139c9b00aab867aeb9749c
+    environment:
+      CLICKHOUSE_USER: bootstrap_admin
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_ADMIN_PASSWORD:?Set CLICKHOUSE_ADMIN_PASSWORD}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+      CLICKHOUSE_BROKER_PASSWORD: ${CLICKHOUSE_BROKER_PASSWORD:?Set CLICKHOUSE_BROKER_PASSWORD}
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - ./ops/clickhouse.sql:/docker-entrypoint-initdb.d/01-history.sql:ro
+      - ./ops/clickhouse-init.sh:/docker-entrypoint-initdb.d/02-broker.sh:ro
+    networks: [archive]
+    healthcheck:
+      test: ["CMD-SHELL", "clickhouse-client --host clickhouse --user broker --password \"$$CLICKHOUSE_BROKER_PASSWORD\" --query 'SELECT id FROM broker.history LIMIT 1'"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  prometheus:
+    image: prom/prometheus:v3.15.1@sha256:fa3302279710be2f21a8301ec17a8b4f2301fd829bd113839b3b6b02b6f191a2
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus", "--storage.tsdb.retention.time=15d"]
+    volumes:
+      - ./ops/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    secrets: [broker_metrics_token]
+    networks: [monitoring]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+
+  grafana:
+    image: grafana/grafana:13.3.1@sha256:0615ec4fbd4072004b7d86b46ded63013a74b7d6eb1119273dd89e8fa25c13cf
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./ops/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./charts/gpu-broker/dashboards:/var/lib/grafana/dashboards:ro
+    networks: [monitoring]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+
+secrets:
+  broker_metrics_token:
+    environment: BROKER_METRICS_TOKEN
+
+networks:
+  archive:
+    internal: true
+  monitoring: {}
+
+volumes:
+  broker-data:
+  clickhouse-data:
+  prometheus-data:
+  grafana-data:
