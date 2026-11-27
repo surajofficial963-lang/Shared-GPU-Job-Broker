@@ -8,11 +8,13 @@ import time
 from pathlib import Path
 
 from flask import Flask, abort, g, request
+from flask_swagger_ui import get_swaggerui_blueprint
 from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram, generate_latest
 from werkzeug.exceptions import HTTPException
 
 from .archive import ArchiveUnavailable, ClickHouseArchive, archive_once
 from .engine import PRIORITIES, Broker, KeyConflict
+from .openapi import specification
 from .store import Store, retention_cutoff
 
 
@@ -90,10 +92,19 @@ def create_app(config=None):
 
         threading.Thread(target=archive_loop, name="broker-archive", daemon=True).start()
 
+    app.register_blueprint(get_swaggerui_blueprint(
+        "/docs", "../openapi.json",
+        config={"app_name": "Shared GPU Job Broker", "validatorUrl": None, "persistAuthorization": False},
+    ))
+
+    @app.get("/openapi.json")
+    def openapi():
+        return specification()
+
     @app.before_request
     def authenticate():
         g.started = time.monotonic()
-        if request.endpoint in {"health", "ready"} or request.url_rule is None:
+        if request.endpoint in {"health", "ready", "openapi"} or request.blueprint == "swagger_ui" or request.url_rule is None:
             return
         header = request.headers.get("Authorization", "")
         scheme, _, credential = header.partition(" ")

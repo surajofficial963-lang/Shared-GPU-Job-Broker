@@ -73,3 +73,22 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(client.get("/queue", headers=self.operator).json["items"], [])
         broker = app.extensions["broker"]
         self.assertTrue(all(node["reserved_job"] is None for node in broker.listing("nodes")))
+
+    def test_swagger_documents_each_api_route_without_disabling_auth(self):
+        result = self.client.get("/openapi.json")
+        self.assertEqual(result.status_code, 200)
+        spec = result.json
+        actual_paths = {
+            rule.rule.replace("<job_id>", "{job_id}")
+            for rule in self.app.url_map.iter_rules()
+            if rule.endpoint != "static" and not rule.endpoint.startswith("swagger_ui.")
+            and rule.endpoint != "openapi"
+        }
+        self.assertEqual(set(spec["paths"]), actual_paths)
+        self.assertEqual(spec["paths"]["/metrics"]["get"]["security"], [{"metricsToken": []}])
+        page = self.client.get("/docs/")
+        self.assertEqual(page.status_code, 200)
+        self.assertIn(b"../openapi.json", page.data)
+        with self.client.get("/docs/swagger-ui-bundle.js") as asset:
+            self.assertEqual(asset.status_code, 200)
+        self.assertEqual(self.client.get("/queue").status_code, 401)
