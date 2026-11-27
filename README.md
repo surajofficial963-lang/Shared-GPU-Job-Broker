@@ -62,7 +62,15 @@ Open [Swagger UI](http://127.0.0.1:8080/docs/) to view and try the routes, or do
 | `POST /simulation/advance` | Operator advances by 1 to 86,400 seconds per call. |
 | `GET /healthz`, `GET /readyz`, `GET /metrics` | Liveness, SQLite readiness, and Prometheus scrape. Metrics require a dedicated bearer token. |
 
-Authenticated broker requests share a per-token limit across the job, queue, node, cost, and simulation routes. After 60 calls in a rolling real-time minute, the next call returns HTTP `429` and starts a 120-second cooldown for that token. Read the `Retry-After` response header or `retry_after_seconds` JSON field before retrying. Blocked requests leave the cooldown deadline in place. The health, documentation and Prometheus endpoints have no broker quota. The counters live in the broker process and reset if its single worker restarts.
+Authenticated broker requests share a per-token limit across the job, queue, node, cost, and simulation routes. By default, after 60 calls in a rolling real-time minute, the next call returns HTTP `429` and starts a 120-second cooldown for that token. Read the `Retry-After` response header or `retry_after_seconds` JSON field before retrying. Blocked requests leave the cooldown deadline in place. The health, documentation and Prometheus endpoints have no broker quota. The counters live in the broker process and reset if its single worker restarts.
+
+Configure the rate limit with positive integers. Set these in `.env` for Compose, then restart the broker with `docker compose up -d broker`.
+
+| Environment variable | Default | Helm value |
+|---|---:|---|
+| `BROKER_RATE_LIMIT_REQUESTS` | 60 | `rateLimitRequests` |
+| `BROKER_RATE_LIMIT_WINDOW_SECONDS` | 60 | `rateLimitWindowSeconds` |
+| `BROKER_RATE_LIMIT_COOLDOWN_SECONDS` | 120 | `rateLimitCooldownSeconds` |
 
 The operator token has full broker access. Optional `BROKER_TEAM_TOKENS` is a JSON object mapping team names to distinct random tokens. Team tokens can submit for their team, look up and cancel their jobs, list their queue and nodes, and retrieve their costs. The service requires separate operator and metrics tokens of at least 32 ASCII characters. Store credentials in your secret manager and use TLS at the API gateway for any remote traffic. The Compose HTTP ports bind to loopback, and the private archive connection uses HTTP only in that local stack.
 

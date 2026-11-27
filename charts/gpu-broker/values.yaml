@@ -10,6 +10,9 @@ storage:
   existingClaim: ""
 idleSeconds: 300
 queueTimeoutSeconds: 1800
+rateLimitRequests: 60
+rateLimitWindowSeconds: 60
+rateLimitCooldownSeconds: 120
 resources:
   requests:
     cpu: 100m

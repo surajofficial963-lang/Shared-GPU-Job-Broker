@@ -152,3 +152,33 @@ class ApiTest(unittest.TestCase):
         labels = b'{gpu_type="gpu-m",team="speech"}'
         self.assertIn(b"broker_job_runtime_seconds_count" + labels + b" 1", metrics)
         self.assertIn(b"broker_job_runtime_seconds_sum" + labels + b" 60", metrics)
+
+    def test_rate_limit_reads_all_three_environment_settings(self):
+        from unittest.mock import patch
+
+        settings = {
+            key: self.app.config[key]
+            for key in ("TESTING", "API_TOKEN", "METRICS_TOKEN", "TEAM_TOKENS", "DB_PATH", "INITIAL_TIME")
+        }
+        settings["ARCHIVE_URL"] = ""
+        with patch.dict("os.environ", {
+            "BROKER_RATE_LIMIT_REQUESTS": "2",
+            "BROKER_RATE_LIMIT_WINDOW_SECONDS": "10",
+            "BROKER_RATE_LIMIT_COOLDOWN_SECONDS": "25",
+        }):
+            client = create_app(settings).test_client()
+
+        with patch("broker.rate_limit.monotonic", return_value=100) as clock:
+            for _ in range(2):
+                self.assertEqual(client.get("/queue", headers=self.operator).status_code, 200)
+            clock.return_value = 110
+            for _ in range(2):
+                self.assertEqual(client.get("/queue", headers=self.operator).status_code, 200)
+            response = client.get("/queue", headers=self.operator)
+            self.assertEqual(response.status_code, 429)
+            self.assertEqual(response.headers["Retry-After"], "25")
+            clock.return_value = 135
+            self.assertEqual(client.get("/queue", headers=self.operator).status_code, 200)
+
+        throttled = client.get("/openapi.json").json["paths"]["/queue"]["get"]["responses"]["429"]
+        self.assertEqual(throttled["content"]["application/json"]["example"]["retry_after_seconds"], 25)
