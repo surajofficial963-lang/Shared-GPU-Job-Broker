@@ -1,0 +1,54 @@
+name: Broker CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.13"
+      - name: Install dependencies
+        run: |
+          python -m pip install --require-hashes --no-deps -r requirements.txt
+          python -m pip check
+      - name: Audit Python dependencies
+        run: pipx run pip-audit --disable-pip --no-deps --require-hashes -r requirements.txt
+      - name: Tests and replay
+        run: |
+          python -m unittest discover -s tests -v
+          python -m broker.replay
+      - name: Check Helm chart
+        run: |
+          helm lint charts/gpu-broker
+          helm template ci charts/gpu-broker
+          helm template ci charts/gpu-broker \
+            --set clickhouse.url=https://archive.example:8443 \
+            --set clickhouse.egressCIDR=10.0.0.0/24 \
+            --set serviceMonitor.enabled=true \
+            --set grafanaDashboard.enabled=true
+      - name: Build image and verify Compose integration
+        shell: bash
+        run: |
+          umask 077
+          for name in BROKER_API_TOKEN BROKER_METRICS_TOKEN CLICKHOUSE_ADMIN_PASSWORD CLICKHOUSE_BROKER_PASSWORD GRAFANA_ADMIN_PASSWORD; do
+            printf '%s=%s\n' "$name" "$(openssl rand -hex 32)" >> .env
+          done
+          set -a
+          source .env
+          set +a
+          trap 'docker compose down --volumes' EXIT
+          docker compose config --quiet
+          docker compose up --build --wait --wait-timeout 120
+          python tests/compose_smoke.py
+          docker compose exec -T prometheus promtool check config /etc/prometheus/prometheus.yml

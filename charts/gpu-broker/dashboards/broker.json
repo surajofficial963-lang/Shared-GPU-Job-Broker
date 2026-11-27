@@ -1,0 +1,612 @@
+{
+  "title": "Shared GPU Job Broker",
+  "uid": "shared-gpu-broker",
+  "schemaVersion": 39,
+  "timezone": "utc",
+  "refresh": "30s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Job completion time p90",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "broker-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 8,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "broker-prometheus"
+          },
+          "legendFormat": "p90 {{team}} / {{gpu_type}}",
+          "expr": "histogram_quantile(0.90, sum by (le, team, gpu_type) (broker_job_runtime_seconds_bucket{team=~\"$team\",gpu_type=~\"$gpu_type\"}))"
+        }
+      ],
+      "description": "Approximate cumulative percentiles from job start to successful completion."
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Job completion time p95",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "broker-prometheus"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 8,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "broker-prometheus"
+          },
+          "legendFormat": "p95 {{team}} / {{gpu_type}}",
+          "expr": "histogram_quantile(0.95, sum by (le, team, gpu_type) (broker_job_runtime_seconds_bucket{team=~\"$team\",gpu_type=~\"$gpu_type\"}))"
+        }
+      ],
+      "description": "Approximate cumulative percentiles from job start to successful completion."
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "Job completion time (${percentile:text})",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "broker-prometheus"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 8,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "broker-prometheus"
+          },
+          "legendFormat": "{{team}} / {{gpu_type}}",
+          "expr": "histogram_quantile(${percentile:raw}, sum by (le, team, gpu_type) (broker_job_runtime_seconds_bucket{team=~\"$team\",gpu_type=~\"$gpu_type\"}))"
+        }
+      ],
+      "description": "Approximate cumulative percentiles from job start to successful completion."
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Job queue wait p90",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "broker-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 8,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "broker-prometheus"
+          },
+          "legendFormat": "{{team}} / {{gpu_type}}",
+          "expr": "histogram_quantile(0.90, sum by (le, team, gpu_type) (broker_job_queue_wait_seconds_bucket{team=~\"$team\",gpu_type=~\"$gpu_type\"}))"
+        }
+      ],
+      "description": "Approximate wait from submission to start, grouped by team and the allocated GPU node type. Includes started jobs in retained metrics."
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Job queue wait p95",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "broker-prometheus"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 8,
+        "w": 8,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "broker-prometheus"
+          },
+          "legendFormat": "{{team}} / {{gpu_type}}",
+          "expr": "histogram_quantile(0.95, sum by (le, team, gpu_type) (broker_job_queue_wait_seconds_bucket{team=~\"$team\",gpu_type=~\"$gpu_type\"}))"
+        }
+      ],
+      "description": "Approximate wait from submission to start, grouped by team and the allocated GPU node type. Includes started jobs in retained metrics."
+    },
+    {
+      "id": 15,
+      "type": "timeseries",
+      "title": "Job queue wait (${percentile:text})",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "broker-prometheus"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 8,
+        "w": 8,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "broker-prometheus"
+          },
+          "legendFormat": "{{team}} / {{gpu_type}}",
+          "expr": "histogram_quantile(${percentile:raw}, sum by (le, team, gpu_type) (broker_job_queue_wait_seconds_bucket{team=~\"$team\",gpu_type=~\"$gpu_type\"}))"
+        }
+      ],
+      "description": "Approximate wait from submission to start, grouped by team and the allocated GPU node type. Includes started jobs in retained metrics."
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "HTTP request latency p90",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "broker-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 8,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.90, sum by (le, route) (rate(broker_http_request_duration_seconds_bucket[$__rate_interval])))",
+          "legendFormat": "p90 {{route}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "broker-prometheus"
+          }
+        }
+      ],
+      "description": "HTTP handler latency by route. Team and GPU filters apply to job queue wait."
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "HTTP request latency p95",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "broker-prometheus"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 16,
+        "w": 8,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le, route) (rate(broker_http_request_duration_seconds_bucket[$__rate_interval])))",
+          "legendFormat": "p95 {{route}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "broker-prometheus"
+          }
+        }
+      ],
+      "description": "HTTP handler latency by route. Team and GPU filters apply to job queue wait."
+    },
+    {
+      "id": 16,
+      "type": "timeseries",
+      "title": "HTTP request latency (${percentile:text})",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "broker-prometheus"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 16,
+        "w": 8,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(${percentile:raw}, sum by (le, route) (rate(broker_http_request_duration_seconds_bucket[$__rate_interval])))",
+          "legendFormat": "{{route}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "broker-prometheus"
+          }
+        }
+      ],
+      "description": "HTTP handler latency by route. Team and GPU filters apply to job queue wait."
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "HTTP requests per second",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "broker-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (route) (rate(broker_http_requests_total[$__rate_interval]))",
+          "legendFormat": "{{route}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "broker-prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Estimated cost over the last 24 simulated hours",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "broker-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "broker_cost_usd_24h",
+          "legendFormat": "Total",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "broker-prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Queue and live nodes",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "broker-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "broker_queued_jobs",
+          "legendFormat": "Queued jobs",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "broker-prometheus"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "broker_live_nodes",
+          "legendFormat": "Live nodes",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "broker-prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Archival health",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "broker-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "broker_archive_pending_records",
+          "legendFormat": "Pending",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "broker-prometheus"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "increase(broker_archived_records_total[5m])",
+          "legendFormat": "Archived in 5m",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "broker-prometheus"
+          }
+        },
+        {
+          "refId": "C",
+          "expr": "increase(broker_archive_errors_total[5m])",
+          "legendFormat": "Errors in 5m",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "broker-prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "HTTP 5xx responses per second",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "broker-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 40,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (route) (rate(broker_http_requests_total{status=~\"5..\"}[$__rate_interval]))",
+          "legendFormat": "{{route}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "broker-prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Rate-limited requests per second",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "broker-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 40,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (route) (rate(broker_http_requests_total{status=\"429\"}[$__rate_interval]))",
+          "legendFormat": "{{route}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "broker-prometheus"
+          }
+        }
+      ]
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "team",
+        "label": "Team",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "broker-prometheus"
+        },
+        "query": "label_values(broker_job_queue_wait_seconds_count, team)",
+        "definition": "label_values(broker_job_queue_wait_seconds_count, team)",
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "refresh": 1,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "gpu_type",
+        "label": "GPU node type",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "broker-prometheus"
+        },
+        "query": "label_values(broker_job_queue_wait_seconds_count{team=~\"$team\"}, gpu_type)",
+        "definition": "label_values(broker_job_queue_wait_seconds_count{team=~\"$team\"}, gpu_type)",
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "refresh": 1,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "percentile",
+        "label": "Percentile",
+        "type": "custom",
+        "query": "p50 : 0.50, p75 : 0.75, p90 : 0.90, p95 : 0.95, p99 : 0.99",
+        "current": {
+          "text": "p90",
+          "value": "0.90",
+          "selected": true
+        },
+        "options": [
+          {
+            "text": "p50",
+            "value": "0.50",
+            "selected": false
+          },
+          {
+            "text": "p75",
+            "value": "0.75",
+            "selected": false
+          },
+          {
+            "text": "p90",
+            "value": "0.90",
+            "selected": true
+          },
+          {
+            "text": "p95",
+            "value": "0.95",
+            "selected": false
+          },
+          {
+            "text": "p99",
+            "value": "0.99",
+            "selected": false
+          }
+        ],
+        "multi": false,
+        "includeAll": false
+      }
+    ]
+  },
+  "version": 4
+}

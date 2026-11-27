@@ -1,0 +1,126 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "gpu-broker.name" . }}
+  labels:
+    {{- include "gpu-broker.selector" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "gpu-broker.selector" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "gpu-broker.selector" . | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 45
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: broker
+          {{- if .Values.image.digest }}
+          image: {{ printf "%s@%s" .Values.image.repository .Values.image.digest | quote }}
+          {{- else }}
+          image: {{ printf "%s:%s" .Values.image.repository .Values.image.tag | quote }}
+          {{- end }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: BROKER_IDLE_SECONDS
+              value: {{ .Values.idleSeconds | quote }}
+            - name: BROKER_QUEUE_TIMEOUT_SECONDS
+              value: {{ .Values.queueTimeoutSeconds | quote }}
+            - name: BROKER_RATE_LIMIT_REQUESTS
+              value: {{ .Values.rateLimitRequests | quote }}
+            - name: BROKER_RATE_LIMIT_WINDOW_SECONDS
+              value: {{ .Values.rateLimitWindowSeconds | quote }}
+            - name: BROKER_RATE_LIMIT_COOLDOWN_SECONDS
+              value: {{ .Values.rateLimitCooldownSeconds | quote }}
+            {{- if .Values.clickhouse.url }}
+            - name: CLICKHOUSE_URL
+              value: {{ .Values.clickhouse.url | quote }}
+            {{- end }}
+            {{- range $name := list "BROKER_API_TOKEN" "BROKER_METRICS_TOKEN" "BROKER_TEAM_TOKENS" "CLICKHOUSE_USER" "CLICKHOUSE_PASSWORD" }}
+            - name: {{ $name }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.existingSecret | quote }}
+                  key: {{ $name }}
+                  {{- if or (eq $name "BROKER_TEAM_TOKENS") (and (hasPrefix "CLICKHOUSE_" $name) (not $.Values.clickhouse.url)) }}
+                  optional: true
+                  {{- end }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ default (include "gpu-broker.name" .) .Values.storage.existingClaim | quote }}
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "gpu-broker.name" . }}
+  labels:
+    {{- include "gpu-broker.selector" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "gpu-broker.selector" . | nindent 4 }}
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+{{- if not .Values.storage.existingClaim }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "gpu-broker.name" . }}
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  accessModes: ["ReadWriteOnce"]
+  {{- with .Values.storage.className }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.storage.size }}
+{{- end }}
