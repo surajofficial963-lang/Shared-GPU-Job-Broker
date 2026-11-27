@@ -57,7 +57,9 @@ def check_grafana(password):
         try:
             with urlopen(req, timeout=2) as response:
                 dashboard = json.load(response)["dashboard"]
-                assert "Job completion time" in {panel["title"] for panel in dashboard["panels"]}
+                titles = {panel["title"] for panel in dashboard["panels"]}
+                for timing in ("Job completion time", "Job queue wait", "HTTP request latency"):
+                    assert {f"{timing} p90", f"{timing} p95", f"{timing} (${{percentile:text}})"} <= titles
                 print("Grafana dashboard provisioned")
                 return
         except OSError:
