@@ -25,18 +25,19 @@ def parameter(name, location, schema, description, required=True):
     return {"name": name, "in": location, "schema": schema, "description": description, "required": required}
 
 
-def operation(summary, responses, **fields):
-    if "security" not in fields:
-        responses["429"] = {
-            "description": "Request limit exceeded for this credential",
-            "headers": {"Retry-After": {"description": "Seconds remaining in cooldown",
-                                        "schema": {"type": "integer"}}},
-            "content": {JSON: {"example": {"error": "Too many requests", "retry_after_seconds": 120}}},
-        }
-    return {"summary": summary, "responses": responses, **fields}
+def specification(cooldown_seconds=120):
+    def operation(summary, responses, **fields):
+        if "security" not in fields:
+            responses["429"] = {
+                "description": "Request limit exceeded for this credential",
+                "headers": {"Retry-After": {"description": "Seconds remaining in cooldown",
+                                            "schema": {"type": "integer"}}},
+                "content": {JSON: {"example": {
+                    "error": "Too many requests", "retry_after_seconds": cooldown_seconds,
+                }}},
+            }
+        return {"summary": summary, "responses": responses, **fields}
 
-
-def specification():
     identifier = "d075f9c27ec84418ad77fc204de849fe"
     job_id = parameter("job_id", "path", {"type": "string", "pattern": "^[0-9a-f]{32}$"},
                        "ID returned by POST /jobs")

@@ -37,6 +37,9 @@ def create_app(config=None):
         TEAM_TOKENS=os.getenv("BROKER_TEAM_TOKENS", "{}"),
         IDLE_SECONDS=int(os.getenv("BROKER_IDLE_SECONDS", "300")),
         QUEUE_TIMEOUT_SECONDS=int(os.getenv("BROKER_QUEUE_TIMEOUT_SECONDS", "1800")),
+        RATE_LIMIT_REQUESTS=int(os.getenv("BROKER_RATE_LIMIT_REQUESTS", "60")),
+        RATE_LIMIT_WINDOW_SECONDS=int(os.getenv("BROKER_RATE_LIMIT_WINDOW_SECONDS", "60")),
+        RATE_LIMIT_COOLDOWN_SECONDS=int(os.getenv("BROKER_RATE_LIMIT_COOLDOWN_SECONDS", "120")),
         ARCHIVE_INTERVAL=int(os.getenv("BROKER_ARCHIVE_INTERVAL", "30")),
         ARCHIVE_URL=os.getenv("CLICKHOUSE_URL", ""),
         ARCHIVE_USER=os.getenv("CLICKHOUSE_USER", ""),
@@ -58,6 +61,14 @@ def create_app(config=None):
         raise ValueError("Intervals must be positive")
     if not 1 <= settings["QUEUE_TIMEOUT_SECONDS"] <= MAX_SECONDS:
         raise ValueError(f"BROKER_QUEUE_TIMEOUT_SECONDS must be between 1 and {MAX_SECONDS}")
+    for key in ("RATE_LIMIT_REQUESTS", "RATE_LIMIT_WINDOW_SECONDS", "RATE_LIMIT_COOLDOWN_SECONDS"):
+        if settings[key] < 1:
+            raise ValueError(f"BROKER_{key} must be a positive integer")
+    rate_limit = RateLimiter(
+        limit=settings["RATE_LIMIT_REQUESTS"],
+        window=settings["RATE_LIMIT_WINDOW_SECONDS"],
+        cooldown=settings["RATE_LIMIT_COOLDOWN_SECONDS"],
+    )
     if settings["ARCHIVE_URL"] and not (settings["ARCHIVE_USER"] and settings["ARCHIVE_PASSWORD"]):
         raise ValueError("Configure a dedicated ClickHouse credential")
     archive = ClickHouseArchive(
@@ -72,7 +83,6 @@ def create_app(config=None):
     broker.advance_by(0)
     app.extensions["broker"] = broker
 
-    rate_limit = RateLimiter()
     registry = CollectorRegistry()
     registry.register(JobTimingCollector(store))
     calls = Counter("broker_http_requests", "HTTP responses", ["method", "route", "status"], registry=registry)
@@ -103,7 +113,7 @@ def create_app(config=None):
 
     @app.get("/openapi.json")
     def openapi():
-        return specification()
+        return specification(settings["RATE_LIMIT_COOLDOWN_SECONDS"])
 
     def enforce_rate_limit(identity):
         retry_after = rate_limit.retry_after(identity)
