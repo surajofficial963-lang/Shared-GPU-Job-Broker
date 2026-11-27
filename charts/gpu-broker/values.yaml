@@ -1,0 +1,32 @@
+image:
+  repository: gpu-broker
+  tag: "0.1.0"
+  digest: ""
+  pullPolicy: IfNotPresent
+existingSecret: gpu-broker-credentials
+storage:
+  size: 2Gi
+  className: ""
+  existingClaim: ""
+idleSeconds: 300
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: "1"
+    memory: 512Mi
+clickhouse:
+  url: ""
+  # Set to the CIDR of the TLS endpoint when archiving is enabled.
+  egressCIDR: ""
+  port: 8443
+networkPolicy:
+  enabled: true
+  # Label namespaces that may connect to the API or scrape metrics.
+  allowedNamespaceLabel: gpu-broker-access
+serviceMonitor:
+  enabled: false
+  labels: {}
+grafanaDashboard:
+  enabled: false

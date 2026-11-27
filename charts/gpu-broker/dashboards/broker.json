@@ -1,0 +1,241 @@
+{
+  "title": "Shared GPU Job Broker",
+  "uid": "shared-gpu-broker",
+  "schemaVersion": 39,
+  "timezone": "utc",
+  "refresh": "30s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "HTTP request latency",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "broker-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.90, sum by (le, route) (rate(broker_http_request_duration_seconds_bucket[$__rate_interval])))",
+          "legendFormat": "p90 {{route}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "broker-prometheus"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum by (le, route) (rate(broker_http_request_duration_seconds_bucket[$__rate_interval])))",
+          "legendFormat": "p95 {{route}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "broker-prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "HTTP requests per second",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "broker-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (route) (rate(broker_http_requests_total[$__rate_interval]))",
+          "legendFormat": "{{route}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "broker-prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Estimated cost over the last 24 simulated hours",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "broker-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "broker_cost_usd_24h",
+          "legendFormat": "Total",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "broker-prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Queue and live nodes",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "broker-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "broker_queued_jobs",
+          "legendFormat": "Queued jobs",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "broker-prometheus"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "broker_live_nodes",
+          "legendFormat": "Live nodes",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "broker-prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Archival health",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "broker-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "broker_archive_pending_records",
+          "legendFormat": "Pending",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "broker-prometheus"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "increase(broker_archived_records_total[5m])",
+          "legendFormat": "Archived in 5m",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "broker-prometheus"
+          }
+        },
+        {
+          "refId": "C",
+          "expr": "increase(broker_archive_errors_total[5m])",
+          "legendFormat": "Errors in 5m",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "broker-prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "HTTP 5xx responses per second",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "broker-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (route) (rate(broker_http_requests_total{status=~\"5..\"}[$__rate_interval]))",
+          "legendFormat": "{{route}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "broker-prometheus"
+          }
+        }
+      ]
+    }
+  ]
+}
