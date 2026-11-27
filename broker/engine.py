@@ -4,6 +4,7 @@ import random
 import uuid
 from collections import defaultdict
 
+from .queue_metrics import record_wait
 from .store import retention_cutoff
 
 PRIORITIES = {"high": 0, "normal": 1, "low": 2}
@@ -140,7 +141,7 @@ class Broker:
         ).fetchall():
             # Keep an accepted launch's promised capacity available to its job.
             node = db.execute(
-                """SELECT n.id, n.gpus - coalesce(sum(j.gpus), 0) AS free
+                """SELECT n.id, n.gpus, n.gpus - coalesce(sum(j.gpus), 0) AS free
                    FROM nodes n LEFT JOIN jobs j ON j.node_id = n.id AND j.status = 'running'
                    WHERE n.ended IS NULL AND n.state = 'ready' AND n.team = ?
                    AND (n.reserved_job IS NULL OR n.reserved_job = ?)
@@ -155,6 +156,7 @@ class Broker:
                 )
                 db.execute("UPDATE nodes SET reserved_job = NULL WHERE reserved_job = ?", (job["id"],))
                 db.execute("UPDATE nodes SET idle_since = NULL WHERE id = ?", (node["id"],))
+                record_wait(db, job["team"], node["gpus"], now - job["submitted"])
 
     def _launch(self, db, now):
         clock = db.execute("SELECT attempts, retry_at FROM clock WHERE id = 1").fetchone()

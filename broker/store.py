@@ -3,6 +3,8 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
 
+from .queue_metrics import record_wait
+
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS clock (
@@ -44,6 +46,14 @@ CREATE TABLE IF NOT EXISTS nodes (
     idle_since INTEGER,
     ended INTEGER
 );
+CREATE TABLE IF NOT EXISTS queue_wait_buckets (
+    team TEXT NOT NULL,
+    node_gpus INTEGER NOT NULL,
+    bucket INTEGER NOT NULL,
+    observations INTEGER NOT NULL,
+    seconds INTEGER NOT NULL,
+    PRIMARY KEY (team, node_gpus, bucket)
+);
 CREATE INDEX IF NOT EXISTS jobs_queue ON jobs(priority, submitted, id)
     WHERE status = 'queued';
 CREATE INDEX IF NOT EXISTS jobs_queue_deadline ON jobs(submitted) WHERE status = 'queued';
@@ -82,6 +92,12 @@ class Store:
             columns = {row["name"] for row in db.execute("PRAGMA table_info(jobs)")}
             if "failure_reason" not in columns:
                 db.execute("ALTER TABLE jobs ADD COLUMN failure_reason TEXT")
+            if db.execute("SELECT 1 FROM queue_wait_buckets LIMIT 1").fetchone() is None:
+                for job in db.execute(
+                    """SELECT j.team, n.gpus, j.started - j.submitted AS wait_seconds
+                       FROM jobs j JOIN nodes n ON n.id = j.node_id WHERE j.started IS NOT NULL"""
+                ):
+                    record_wait(db, job["team"], job["gpus"], job["wait_seconds"])
 
     @contextmanager
     def session(self, write=False):

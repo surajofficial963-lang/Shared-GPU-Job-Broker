@@ -52,7 +52,7 @@ def check_grafana(password):
         try:
             with urlopen(req, timeout=2) as response:
                 dashboard = json.load(response)["dashboard"]
-                assert len(dashboard["panels"]) == 6
+                assert len(dashboard["panels"]) == 9
                 print("Grafana dashboard provisioned")
                 return
         except OSError:
