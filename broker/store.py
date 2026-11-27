@@ -65,9 +65,9 @@ CREATE TABLE IF NOT EXISTS runtime_buckets (
 CREATE INDEX IF NOT EXISTS jobs_queue ON jobs(priority, submitted, id)
     WHERE status = 'queued';
 CREATE INDEX IF NOT EXISTS jobs_queue_deadline ON jobs(submitted) WHERE status = 'queued';
-CREATE INDEX IF NOT EXISTS jobs_completion ON jobs(started + duration) WHERE status = 'running';
+CREATE INDEX IF NOT EXISTS jobs_completion ON jobs((started + duration)) WHERE status = 'running';
 CREATE INDEX IF NOT EXISTS nodes_reservation ON nodes(reserved_job) WHERE ended IS NULL;
-CREATE INDEX IF NOT EXISTS jobs_running ON jobs(node_id, started + duration)
+CREATE INDEX IF NOT EXISTS jobs_running ON jobs(node_id, (started + duration))
     WHERE status = 'running';
 CREATE INDEX IF NOT EXISTS jobs_ended ON jobs(ended) WHERE ended IS NOT NULL;
 CREATE INDEX IF NOT EXISTS jobs_team_started ON jobs(team, started) WHERE started IS NOT NULL;
@@ -87,6 +87,22 @@ def retention_cutoff(now):
     return int(current.replace(year=year, month=month, day=day).timestamp())
 
 
+def backfill_metrics(db):
+    if db.execute("SELECT 1 FROM queue_wait_buckets LIMIT 1").fetchone() is None:
+        for job in db.execute(
+            """SELECT j.team, n.gpus, j.started - j.submitted AS wait_seconds
+               FROM jobs j JOIN nodes n ON n.id = j.node_id WHERE j.started IS NOT NULL"""
+        ):
+            record_timing(db, "queue_wait_buckets", job["team"], job["gpus"], job["wait_seconds"])
+    if db.execute("SELECT 1 FROM runtime_buckets LIMIT 1").fetchone() is None:
+        for job in db.execute(
+            """SELECT j.team, n.gpus, j.ended - j.started AS runtime_seconds
+               FROM jobs j JOIN nodes n ON n.id = j.node_id WHERE j.status = 'succeeded'"""
+        ):
+            record_timing(db, "runtime_buckets", job["team"], job["gpus"],
+                          job["runtime_seconds"])
+
+
 class Store:
     def __init__(self, path, initial_time):
         self.path = path
@@ -100,24 +116,17 @@ class Store:
             columns = {row["name"] for row in db.execute("PRAGMA table_info(jobs)")}
             if "failure_reason" not in columns:
                 db.execute("ALTER TABLE jobs ADD COLUMN failure_reason TEXT")
-            if db.execute("SELECT 1 FROM queue_wait_buckets LIMIT 1").fetchone() is None:
-                for job in db.execute(
-                    """SELECT j.team, n.gpus, j.started - j.submitted AS wait_seconds
-                       FROM jobs j JOIN nodes n ON n.id = j.node_id WHERE j.started IS NOT NULL"""
-                ):
-                    record_timing(db, "queue_wait_buckets", job["team"], job["gpus"], job["wait_seconds"])
-            if db.execute("SELECT 1 FROM runtime_buckets LIMIT 1").fetchone() is None:
-                for job in db.execute(
-                    """SELECT j.team, n.gpus, j.ended - j.started AS runtime_seconds
-                       FROM jobs j JOIN nodes n ON n.id = j.node_id WHERE j.status = 'succeeded'"""
-                ):
-                    record_timing(db, "runtime_buckets", job["team"], job["gpus"],
-                                  job["runtime_seconds"])
+            backfill_metrics(db)
+
+    def reclaim_archived_space(self):
+        with self.session(write=True) as db:
+            db.execute("PRAGMA incremental_vacuum(128)")
 
     @contextmanager
     def session(self, write=False):
         db = sqlite3.connect(self.path, timeout=5, isolation_level=None)
         db.row_factory = sqlite3.Row
+        db.create_function("greatest", 2, max, deterministic=True)
         try:
             db.execute("PRAGMA synchronous = FULL")
             if write:

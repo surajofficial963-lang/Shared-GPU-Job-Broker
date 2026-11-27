@@ -33,6 +33,7 @@ jobs:
           helm lint charts/gpu-broker
           helm template ci charts/gpu-broker
           helm template ci charts/gpu-broker \
+            --set postgres.egressCIDR=10.1.0.0/24 \
             --set clickhouse.url=https://archive.example:8443 \
             --set clickhouse.egressCIDR=10.0.0.0/24 \
             --set serviceMonitor.enabled=true \
@@ -41,7 +42,7 @@ jobs:
         shell: bash
         run: |
           umask 077
-          for name in BROKER_API_TOKEN BROKER_METRICS_TOKEN CLICKHOUSE_ADMIN_PASSWORD CLICKHOUSE_BROKER_PASSWORD GRAFANA_ADMIN_PASSWORD; do
+          for name in BROKER_API_TOKEN BROKER_METRICS_TOKEN CLICKHOUSE_ADMIN_PASSWORD CLICKHOUSE_BROKER_PASSWORD GRAFANA_ADMIN_PASSWORD POSTGRES_ADMIN_PASSWORD BROKER_POSTGRES_PASSWORD; do
             printf '%s=%s\n' "$name" "$(openssl rand -hex 32)" >> .env
           done
           set -a

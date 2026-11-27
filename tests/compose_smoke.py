@@ -15,7 +15,8 @@ def request(path, payload=None, *, metrics=False):
         "Idempotency-Key": "compose-archive-smoke",
     }
     data = None if payload is None else json.dumps(payload).encode()
-    with urlopen(Request(f"http://127.0.0.1:8080{path}", data=data, headers=headers), timeout=10) as response:
+    base_url = os.getenv("BROKER_SMOKE_URL", "http://127.0.0.1:8080")
+    with urlopen(Request(base_url + path, data=data, headers=headers), timeout=10) as response:
         return response.read().decode() if metrics else json.load(response)
 
 
@@ -31,8 +32,8 @@ def main():
     # Jump directly to the retention boundary in this disposable test stack.
     subprocess.run([
         "docker", "compose", "exec", "-T", "broker", "python", "-c",
-        "from broker.engine import Broker; from broker.store import Store; "
-        "Broker(Store('/data/broker.db', 0)).advance_by(95 * 86400)",
+        "import os; from broker.engine import Broker; from broker.postgres import PostgresStore; "
+        "Broker(PostgresStore(os.environ['BROKER_DATABASE_URL'], 0)).advance_by(95 * 86400)",
     ], check=True)
     for _ in range(50):
         metrics = request("/metrics", metrics=True)
@@ -51,7 +52,8 @@ def main():
 
 def check_grafana(password):
     credentials = base64.b64encode(f"admin:{password}".encode()).decode()
-    req = Request("http://127.0.0.1:3000/api/dashboards/uid/shared-gpu-broker",
+    base_url = os.getenv("GRAFANA_SMOKE_URL", "http://127.0.0.1:3000")
+    req = Request(base_url + "/api/dashboards/uid/shared-gpu-broker",
                   headers={"Authorization": f"Basic {credentials}"})
     for _ in range(30):
         try:
