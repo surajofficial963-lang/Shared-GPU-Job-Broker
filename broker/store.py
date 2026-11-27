@@ -23,7 +23,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     outcome TEXT NOT NULL,
     started INTEGER,
     ended INTEGER,
-    node_id TEXT
+    node_id TEXT,
+    failure_reason TEXT
 );
 CREATE TABLE IF NOT EXISTS submissions (
     digest TEXT PRIMARY KEY,
@@ -45,6 +46,7 @@ CREATE TABLE IF NOT EXISTS nodes (
 );
 CREATE INDEX IF NOT EXISTS jobs_queue ON jobs(priority, submitted, id)
     WHERE status = 'queued';
+CREATE INDEX IF NOT EXISTS jobs_queue_deadline ON jobs(submitted) WHERE status = 'queued';
 CREATE INDEX IF NOT EXISTS jobs_completion ON jobs(started + duration) WHERE status = 'running';
 CREATE INDEX IF NOT EXISTS nodes_reservation ON nodes(reserved_job) WHERE ended IS NULL;
 CREATE INDEX IF NOT EXISTS jobs_running ON jobs(node_id, started + duration)
@@ -76,6 +78,10 @@ class Store:
             db.execute("PRAGMA journal_mode = WAL")
             db.executescript(SCHEMA)
             db.execute("INSERT OR IGNORE INTO clock(id, now) VALUES (1, ?)", (initial_time,))
+        with self.session(write=True) as db:
+            columns = {row["name"] for row in db.execute("PRAGMA table_info(jobs)")}
+            if "failure_reason" not in columns:
+                db.execute("ALTER TABLE jobs ADD COLUMN failure_reason TEXT")
 
     @contextmanager
     def session(self, write=False):

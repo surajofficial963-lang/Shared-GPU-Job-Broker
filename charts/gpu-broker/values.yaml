@@ -9,6 +9,7 @@ storage:
   className: ""
   existingClaim: ""
 idleSeconds: 300
+queueTimeoutSeconds: 1800
 resources:
   requests:
     cpu: 100m

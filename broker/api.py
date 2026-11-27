@@ -32,6 +32,7 @@ def create_app(config=None):
         METRICS_TOKEN=os.getenv("BROKER_METRICS_TOKEN", ""),
         TEAM_TOKENS=os.getenv("BROKER_TEAM_TOKENS", "{}"),
         IDLE_SECONDS=int(os.getenv("BROKER_IDLE_SECONDS", "300")),
+        QUEUE_TIMEOUT_SECONDS=int(os.getenv("BROKER_QUEUE_TIMEOUT_SECONDS", "1800")),
         ARCHIVE_INTERVAL=int(os.getenv("BROKER_ARCHIVE_INTERVAL", "30")),
         ARCHIVE_URL=os.getenv("CLICKHOUSE_URL", ""),
         ARCHIVE_USER=os.getenv("CLICKHOUSE_USER", ""),
@@ -51,6 +52,8 @@ def create_app(config=None):
         raise ValueError("Credentials must be distinct")
     if settings["IDLE_SECONDS"] < 1 or settings["ARCHIVE_INTERVAL"] < 1:
         raise ValueError("Intervals must be positive")
+    if not 1 <= settings["QUEUE_TIMEOUT_SECONDS"] <= MAX_SECONDS:
+        raise ValueError(f"BROKER_QUEUE_TIMEOUT_SECONDS must be between 1 and {MAX_SECONDS}")
     if settings["ARCHIVE_URL"] and not (settings["ARCHIVE_USER"] and settings["ARCHIVE_PASSWORD"]):
         raise ValueError("Configure a dedicated ClickHouse credential")
     archive = ClickHouseArchive(
@@ -58,7 +61,11 @@ def create_app(config=None):
         allow_http=settings["ARCHIVE_ALLOW_HTTP"],
     ) if settings["ARCHIVE_URL"] else None
     store = Store(settings["DB_PATH"], settings["INITIAL_TIME"])
-    broker = Broker(store, settings["IDLE_SECONDS"], archive=archive)
+    broker = Broker(
+        store, settings["IDLE_SECONDS"], archive=archive,
+        queue_timeout_seconds=settings["QUEUE_TIMEOUT_SECONDS"],
+    )
+    broker.advance_by(0)
     app.extensions["broker"] = broker
 
     registry = CollectorRegistry()
@@ -160,6 +167,7 @@ def create_app(config=None):
         public = {key: job[key] for key in (
             "id", "team", "gpus", "estimate", "status", "submitted", "started", "ended", "node_id"
         )}
+        public["failure_reason"] = job.get("failure_reason")
         public["priority"] = next(name for name, value in PRIORITIES.items() if value == job["priority"])
         return public
 
