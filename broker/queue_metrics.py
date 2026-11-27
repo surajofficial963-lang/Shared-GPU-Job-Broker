@@ -20,7 +20,7 @@ def record_timing(db, table, team, node_gpus, seconds):
         f"""INSERT INTO {table}(team, node_gpus, bucket, observations, seconds)
            VALUES (?, ?, ?, 1, ?)
            ON CONFLICT(team, node_gpus, bucket) DO UPDATE SET
-             observations = observations + 1, seconds = seconds + excluded.seconds""",
+             observations = {table}.observations + 1, seconds = {table}.seconds + excluded.seconds""",
         (team, node_gpus, bucket, seconds),
     )
 

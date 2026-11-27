@@ -58,7 +58,7 @@ spec:
             - name: CLICKHOUSE_URL
               value: {{ .Values.clickhouse.url | quote }}
             {{- end }}
-            {{- range $name := list "BROKER_API_TOKEN" "BROKER_METRICS_TOKEN" "BROKER_TEAM_TOKENS" "CLICKHOUSE_USER" "CLICKHOUSE_PASSWORD" }}
+            {{- range $name := list "BROKER_DATABASE_URL" "BROKER_API_TOKEN" "BROKER_METRICS_TOKEN" "BROKER_TEAM_TOKENS" "CLICKHOUSE_USER" "CLICKHOUSE_PASSWORD" }}
             - name: {{ $name }}
               valueFrom:
                 secretKeyRef:
@@ -81,14 +81,9 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
-            - name: data
-              mountPath: /data
             - name: tmp
               mountPath: /tmp
       volumes:
-        - name: data
-          persistentVolumeClaim:
-            claimName: {{ default (include "gpu-broker.name" .) .Values.storage.existingClaim | quote }}
         - name: tmp
           emptyDir:
             sizeLimit: 64Mi
@@ -107,20 +102,3 @@ spec:
     - name: http
       port: 8080
       targetPort: http
-{{- if not .Values.storage.existingClaim }}
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: {{ include "gpu-broker.name" . }}
-  annotations:
-    helm.sh/resource-policy: keep
-spec:
-  accessModes: ["ReadWriteOnce"]
-  {{- with .Values.storage.className }}
-  storageClassName: {{ . | quote }}
-  {{- end }}
-  resources:
-    requests:
-      storage: {{ .Values.storage.size }}
-{{- end }}

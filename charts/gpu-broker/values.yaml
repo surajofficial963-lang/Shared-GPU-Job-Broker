@@ -4,10 +4,6 @@ image:
   digest: ""
   pullPolicy: IfNotPresent
 existingSecret: gpu-broker-credentials
-storage:
-  size: 2Gi
-  className: ""
-  existingClaim: ""
 idleSeconds: 300
 queueTimeoutSeconds: 1800
 rateLimitRequests: 60
@@ -20,6 +16,10 @@ resources:
   limits:
     cpu: "1"
     memory: 512Mi
+postgres:
+  # Allow access to your PostgreSQL endpoint when NetworkPolicy is enabled.
+  egressCIDR: ""
+  port: 5432
 clickhouse:
   url: ""
   # Set to the CIDR of the TLS endpoint when archiving is enabled.
