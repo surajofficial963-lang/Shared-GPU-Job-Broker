@@ -5,8 +5,8 @@ from itertools import groupby
 BUCKETS = (0, 30, 60, 120, 240, 300, 480, 600, 900, 1800, 3600, 7200, 14400, 86400)
 TIMINGS = {
     "queue_wait_buckets": ("broker_job_queue_wait_seconds", "Simulated seconds between job submission and start"),
-    "completion_time_buckets": (
-        "broker_job_completion_time_seconds", "Simulated seconds between submission and successful completion",
+    "runtime_buckets": (
+        "broker_job_runtime_seconds", "Simulated seconds between job start and successful completion",
     ),
 }
 NODE_TYPES = {1: "gpu-s", 4: "gpu-m", 8: "gpu-l"}

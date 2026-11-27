@@ -139,7 +139,7 @@ class ApiTest(unittest.TestCase):
             clock.return_value = 130
             self.assertEqual(self.client.get("/queue", headers=self.operator).status_code, 200)
 
-    def test_completion_histogram_counts_success_once_and_includes_wait(self):
+    def test_completion_histogram_counts_success_once_and_excludes_queue_wait(self):
         broker = self.app.extensions["broker"]
         broker.provider.launch_node = lambda gpus, now, attempt: (now + 330, False)
         first, _ = broker.submit("speech", 2, 60, "normal", "first")
@@ -150,5 +150,5 @@ class ApiTest(unittest.TestCase):
 
         metrics = self.client.get("/metrics", headers=self.metrics).data
         labels = b'{gpu_type="gpu-m",team="speech"}'
-        self.assertIn(b"broker_job_completion_time_seconds_count" + labels + b" 1", metrics)
-        self.assertIn(b"broker_job_completion_time_seconds_sum" + labels + b" 390", metrics)
+        self.assertIn(b"broker_job_runtime_seconds_count" + labels + b" 1", metrics)
+        self.assertIn(b"broker_job_runtime_seconds_sum" + labels + b" 60", metrics)
