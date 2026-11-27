@@ -41,9 +41,10 @@ class FakeProvider:
 
 
 class Broker:
-    def __init__(self, store, idle_seconds=300, seed=23, archive=None):
+    def __init__(self, store, idle_seconds=300, seed=23, archive=None, queue_timeout_seconds=None):
         self.store = store
         self.idle_seconds = idle_seconds
+        self.queue_timeout_seconds = queue_timeout_seconds
         self.provider = FakeProvider(seed)
         self.archive = archive
 
@@ -89,8 +90,11 @@ class Broker:
             return True
 
     @staticmethod
-    def _end_job(db, job, status, now):
-        db.execute("UPDATE jobs SET status = ?, ended = ? WHERE id = ?", (status, now, job["id"]))
+    def _end_job(db, job, status, now, failure_reason=None):
+        db.execute(
+            "UPDATE jobs SET status = ?, ended = ?, failure_reason = ? WHERE id = ?",
+            (status, now, failure_reason, job["id"]),
+        )
         db.execute("UPDATE nodes SET reserved_job = NULL WHERE reserved_job = ?", (job["id"],))
         if job["node_id"]:
             db.execute(
@@ -100,6 +104,13 @@ class Broker:
             )
 
     def _settle(self, db, now):
+        if self.queue_timeout_seconds is not None:
+            expired = db.execute(
+                "SELECT * FROM jobs WHERE status = 'queued' AND submitted <= ?",
+                (now - self.queue_timeout_seconds,),
+            ).fetchall()
+            for job in expired:
+                self._end_job(db, job, "failed", now, "queue_timeout")
         for job in db.execute(
             "SELECT * FROM jobs WHERE status = 'running' AND started + duration <= ?", (now,)
         ).fetchall():
@@ -189,7 +200,8 @@ class Broker:
                  UNION ALL SELECT min(ready_at) FROM nodes WHERE ended IS NULL AND state = 'booting'
                  UNION ALL SELECT min(idle_since) + ? FROM nodes WHERE ended IS NULL AND state = 'ready'
                  UNION ALL SELECT retry_at FROM clock
-               )""", (self.idle_seconds,)
+                 UNION ALL SELECT min(submitted) + ? FROM jobs WHERE status = 'queued'
+               )""", (self.idle_seconds, self.queue_timeout_seconds)
         ).fetchone()[0]
 
     def advance(self, target=None, *, seconds=None, maximum=None):

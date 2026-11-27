@@ -47,3 +47,29 @@ class ApiTest(unittest.TestCase):
         metrics = self.client.get("/metrics", headers=self.metrics)
         self.assertEqual(metrics.status_code, 200)
         self.assertIn(b'broker_http_requests_total{method="POST",route="/jobs",status="409"} 1', metrics.data)
+
+    def test_configured_queue_timeout_is_exposed_by_api(self):
+        from unittest.mock import patch
+
+        settings = {
+            key: self.app.config[key]
+            for key in ("TESTING", "API_TOKEN", "METRICS_TOKEN", "TEAM_TOKENS", "DB_PATH", "INITIAL_TIME")
+        }
+        settings["ARCHIVE_URL"] = ""
+        with patch.dict("os.environ", {"BROKER_QUEUE_TIMEOUT_SECONDS": "120"}):
+            app = create_app(settings)
+
+        client = app.test_client()
+        result = client.post("/jobs", headers=self.operator, json=self.job)
+        url = result.headers["Location"]
+        client.post("/simulation/advance", headers=self.operator, json={"seconds": 119})
+        self.assertEqual(client.get(url, headers=self.operator).json["status"], "queued")
+        client.post("/simulation/advance", headers=self.operator, json={"seconds": 1})
+        job = client.get(url, headers=self.operator).json
+        self.assertEqual(job["status"], "failed")
+        self.assertEqual(job["failure_reason"], "queue_timeout")
+        self.assertIsNone(job["started"])
+        self.assertEqual(job["ended"] - job["submitted"], 120)
+        self.assertEqual(client.get("/queue", headers=self.operator).json["items"], [])
+        broker = app.extensions["broker"]
+        self.assertTrue(all(node["reserved_job"] is None for node in broker.listing("nodes")))

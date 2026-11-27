@@ -52,7 +52,7 @@ Use the returned job ID with `GET /jobs/{id}`. Use the job's `submitted` time an
 | Request | Behavior |
 |---|---|
 | `POST /jobs` | Requires an `Idempotency-Key`. Returns `201` for a new job, `200` with the original ID for a retry, or `409` when the same team/key has a different payload. |
-| `GET /jobs/{id}` | Returns job status and timestamps, including archived jobs. |
+| `GET /jobs/{id}` | Returns job status, timestamps, and failure reason, including archived jobs. |
 | `POST /jobs/{id}/cancel` | Cancels a queued or running job. Repeated cancellation succeeds. |
 | `POST /jobs/{id}/complete` | Operator reports `{"status":"succeeded"}` or `{"status":"failed"}` for a running job. |
 | `GET /queue`, `GET /nodes` | Lists queued jobs or live nodes. Accepts `limit` and `offset`. |
@@ -63,6 +63,8 @@ Use the returned job ID with `GET /jobs/{id}`. Use the job's `submitted` time an
 The operator token has full broker access. Optional `BROKER_TEAM_TOKENS` is a JSON object mapping team names to distinct random tokens. Team tokens can submit for their team, look up and cancel their jobs, list their queue and nodes, and retrieve their costs. The service requires separate operator and metrics tokens of at least 32 ASCII characters. Store credentials in your secret manager and use TLS at the API gateway for any remote traffic. The Compose HTTP ports bind to loopback, and the private archive connection uses HTTP only in that local stack.
 
 ## Scheduling, cost, and retention
+
+Set `BROKER_QUEUE_TIMEOUT_SECONDS` to control how long jobs can wait before starting. It defaults to `1800` (30 simulated minutes) and accepts 1 through 7,776,000 seconds. For example, set `BROKER_QUEUE_TIMEOUT_SECONDS=900` in `.env` and run `docker compose up -d broker` for a 15-minute limit. For Kubernetes, set Helm's `queueTimeoutSeconds` to `900`. The deadline is measured from submission using the simulated clock. At the deadline a queued job becomes `failed` with `failure_reason: "queue_timeout"` and releases its reservation. Running jobs follow their usual completion rules. A shorter limit applies to existing queued jobs as soon as the broker restarts.
 
 - The scheduler packs same-team jobs onto the smallest available fit, launches the smallest suitable node when needed, and reserves accepted launches for a job. A booting node counts toward the 10-node limit. Capacity errors retry every simulated minute and can occur in bursts. A failed boot costs 15 minutes and releases its reservation.
 - Priority controls ordering without preemption. Aging promotes a waiting job one priority level every 30 minutes. Within a priority class, the scheduler provisions the next node for a team with fewer live nodes, then breaks ties in FIFO order. This balances node counts while queued teams compete for capacity. It does not equalize GPU counts or preempt nodes that are already running. Idle nodes terminate at the configured timeout. Boot, failed launch, and idle charges go to the team assigned to that node.
@@ -93,7 +95,7 @@ Keep the broker at one replica with one Gunicorn worker and a durable PVC. The r
 
 ## Trace replay and scope
 
-The input contains 494 rows. The replay normalizes explicit offsets to UTC, assumes UTC for timestamps without offsets, then sorts stably by timestamp. It skips two unsupported GPU requests and 14 duplicates after timestamp normalization. Without submission IDs, rows identical after normalization are assumed to be repeats. The simulator processes all 478 accepted jobs, including failures and cancellations, then drains jobs and terminates idle nodes before reporting. The scheduler uses GPU size and priority for placement. Actual duration is used only to complete the simulated job.
+The input contains 494 rows. The replay normalizes explicit offsets to UTC, assumes UTC for timestamps without offsets, then sorts stably by timestamp. It skips two unsupported GPU requests and 14 duplicates after timestamp normalization. Without submission IDs, rows identical after normalization are assumed to be repeats. The simulator processes all 478 accepted jobs, including failures and cancellations, then drains jobs and terminates idle nodes before reporting. Replay leaves queue expiry disabled so the idle policy comparison measures eventual wait times for every job. The scheduler uses GPU size and priority for placement. Actual duration is used only to complete the simulated job.
 
 | Team | 5 min idle p50 / p95 wait (min) | 15 min idle p50 / p95 wait (min) |
 |---|---:|---:|

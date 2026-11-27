@@ -136,3 +136,19 @@ class BrokerTest(unittest.TestCase):
 
     def test_calendar_retention_clamps_end_of_month(self):
         self.assertEqual(retention_cutoff(1748649600), 1740700800)  # May 31 -> Feb 28.
+
+    def test_queue_deadline_does_not_affect_running_job(self):
+        self.broker.queue_timeout_seconds = 300
+        job, _ = self.broker.submit("vision", 2, 1200, "normal", "a")
+        self.broker.advance_by(300)
+        self.assertEqual(self.broker.get(job)["status"], "running")
+        self.broker.advance_by(1140)
+        self.assertEqual(self.broker.get(job)["status"], "succeeded")
+
+    def test_shorter_timeout_applies_to_persisted_queue_without_rewinding(self):
+        job, _ = self.broker.submit("vision", 2, 60, "normal", "a")
+        now = self.broker.advance_by(100)
+        restarted = Broker(Store(self.path, 0), queue_timeout_seconds=60)
+        self.assertEqual(restarted.advance_by(0), now)
+        self.assertEqual(restarted.get(job)["ended"], now)
+        self.assertEqual(restarted.get(job)["failure_reason"], "queue_timeout")
