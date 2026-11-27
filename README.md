@@ -2,6 +2,8 @@
 
 A Python HTTP service that schedules simulated GPU jobs, persists operational state in PostgreSQL, and archives terminal records to ClickHouse. Node allocation and billing use a persisted simulated clock. All inputs and infrastructure in the trace are fictional.
 
+See the [architecture diagram](ARCHITECTURE.md) for request, storage, archival, and monitoring flows.
+
 ## Run locally
 
 Requires Python 3.10+ for tests and replay. The full stack requires Docker with Compose v2.
