@@ -15,7 +15,8 @@ from werkzeug.exceptions import HTTPException
 from .archive import ArchiveUnavailable, ClickHouseArchive, archive_once
 from .engine import PRIORITIES, Broker, KeyConflict
 from .openapi import specification
-from .queue_metrics import QueueWaitCollector
+from .queue_metrics import JobTimingCollector
+from .rate_limit import RateLimiter
 from .store import Store, retention_cutoff
 
 
@@ -71,8 +72,9 @@ def create_app(config=None):
     broker.advance_by(0)
     app.extensions["broker"] = broker
 
+    rate_limit = RateLimiter()
     registry = CollectorRegistry()
-    registry.register(QueueWaitCollector(store))
+    registry.register(JobTimingCollector(store))
     calls = Counter("broker_http_requests", "HTTP responses", ["method", "route", "status"], registry=registry)
     duration = Histogram("broker_http_request_duration_seconds", "HTTP handler duration", ["route"], registry=registry)
     cost = Gauge("broker_cost_usd_24h", "Estimated node charges in the last 24 simulated hours", registry=registry)
@@ -103,6 +105,14 @@ def create_app(config=None):
     def openapi():
         return specification()
 
+    def enforce_rate_limit(identity):
+        retry_after = rate_limit.retry_after(identity)
+        if retry_after is not None:
+            return {"error": "Too many requests", "retry_after_seconds": retry_after}, 429, {
+                "Retry-After": str(retry_after),
+            }
+        return None
+
     @app.before_request
     def authenticate():
         g.started = time.monotonic()
@@ -118,11 +128,11 @@ def create_app(config=None):
             return
         g.team = None
         if hmac.compare_digest(credential, settings["API_TOKEN"]):
-            return
+            return enforce_rate_limit(("operator", None))
         for team, token in tokens.items():
             if hmac.compare_digest(credential, token):
                 g.team = team
-                return
+                return enforce_rate_limit(("team", team))
         abort(401)
 
     @app.after_request

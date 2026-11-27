@@ -4,7 +4,7 @@ import random
 import uuid
 from collections import defaultdict
 
-from .queue_metrics import record_wait
+from .queue_metrics import record_timing
 from .store import retention_cutoff
 
 PRIORITIES = {"high": 0, "normal": 1, "low": 2}
@@ -98,6 +98,9 @@ class Broker:
         )
         db.execute("UPDATE nodes SET reserved_job = NULL WHERE reserved_job = ?", (job["id"],))
         if job["node_id"]:
+            if status == "succeeded":
+                node_gpus = db.execute("SELECT gpus FROM nodes WHERE id = ?", (job["node_id"],)).fetchone()[0]
+                record_timing(db, "completion_time_buckets", job["team"], node_gpus, now - job["submitted"])
             db.execute(
                 """UPDATE nodes SET idle_since = ? WHERE id = ?
                    AND NOT EXISTS (SELECT 1 FROM jobs WHERE status = 'running' AND node_id = ?)""",
@@ -156,7 +159,7 @@ class Broker:
                 )
                 db.execute("UPDATE nodes SET reserved_job = NULL WHERE reserved_job = ?", (job["id"],))
                 db.execute("UPDATE nodes SET idle_since = NULL WHERE id = ?", (node["id"],))
-                record_wait(db, job["team"], node["gpus"], now - job["submitted"])
+                record_timing(db, "queue_wait_buckets", job["team"], node["gpus"], now - job["submitted"])
 
     def _launch(self, db, now):
         clock = db.execute("SELECT attempts, retry_at FROM clock WHERE id = 1").fetchone()

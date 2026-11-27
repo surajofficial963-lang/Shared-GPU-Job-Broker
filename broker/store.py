@@ -3,7 +3,7 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
 
-from .queue_metrics import record_wait
+from .queue_metrics import record_timing
 
 
 SCHEMA = """
@@ -54,6 +54,14 @@ CREATE TABLE IF NOT EXISTS queue_wait_buckets (
     seconds INTEGER NOT NULL,
     PRIMARY KEY (team, node_gpus, bucket)
 );
+CREATE TABLE IF NOT EXISTS completion_time_buckets (
+    team TEXT NOT NULL,
+    node_gpus INTEGER NOT NULL,
+    bucket INTEGER NOT NULL,
+    observations INTEGER NOT NULL,
+    seconds INTEGER NOT NULL,
+    PRIMARY KEY (team, node_gpus, bucket)
+);
 CREATE INDEX IF NOT EXISTS jobs_queue ON jobs(priority, submitted, id)
     WHERE status = 'queued';
 CREATE INDEX IF NOT EXISTS jobs_queue_deadline ON jobs(submitted) WHERE status = 'queued';
@@ -97,7 +105,14 @@ class Store:
                     """SELECT j.team, n.gpus, j.started - j.submitted AS wait_seconds
                        FROM jobs j JOIN nodes n ON n.id = j.node_id WHERE j.started IS NOT NULL"""
                 ):
-                    record_wait(db, job["team"], job["gpus"], job["wait_seconds"])
+                    record_timing(db, "queue_wait_buckets", job["team"], job["gpus"], job["wait_seconds"])
+            if db.execute("SELECT 1 FROM completion_time_buckets LIMIT 1").fetchone() is None:
+                for job in db.execute(
+                    """SELECT j.team, n.gpus, j.ended - j.submitted AS completion_seconds
+                       FROM jobs j JOIN nodes n ON n.id = j.node_id WHERE j.status = 'succeeded'"""
+                ):
+                    record_timing(db, "completion_time_buckets", job["team"], job["gpus"],
+                                  job["completion_seconds"])
 
     @contextmanager
     def session(self, write=False):
