@@ -76,6 +76,8 @@ The operator token has full broker access. Optional `BROKER_TEAM_TOKENS` is a JS
 
 ## Scheduling, cost, and retention
 
+Set `BROKER_IDLE_SECONDS` in `.env` to set the idle node timeout for Docker Compose. It defaults to `300` (5 simulated minutes). Apply a new value with `docker compose up -d broker`. In Helm, set `idleSeconds`. The timer starts once the last job leaves the node.
+
 Set `BROKER_QUEUE_TIMEOUT_SECONDS` to control how long jobs can wait before starting. It defaults to `1800` (30 simulated minutes) and accepts 1 through 7,776,000 seconds. For example, set `BROKER_QUEUE_TIMEOUT_SECONDS=900` in `.env` and run `docker compose up -d broker` for a 15-minute limit. For Kubernetes, set Helm's `queueTimeoutSeconds` to `900`. The deadline is measured from submission using the simulated clock. At the deadline a queued job becomes `failed` with `failure_reason: "queue_timeout"` and releases its reservation. Running jobs follow their usual completion rules. A shorter limit applies to existing queued jobs as soon as the broker restarts.
 
 - The scheduler packs same-team jobs onto the smallest available fit, launches the smallest suitable node when needed, and reserves accepted launches for a job. A booting node counts toward the 10-node limit. Capacity errors retry every simulated minute and can occur in bursts. A failed boot costs 15 minutes and releases its reservation.
