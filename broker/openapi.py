@@ -26,6 +26,13 @@ def parameter(name, location, schema, description, required=True):
 
 
 def operation(summary, responses, **fields):
+    if "security" not in fields:
+        responses["429"] = {
+            "description": "Request limit exceeded for this credential",
+            "headers": {"Retry-After": {"description": "Seconds remaining in cooldown",
+                                        "schema": {"type": "integer"}}},
+            "content": {JSON: {"example": {"error": "Too many requests", "retry_after_seconds": 120}}},
+        }
     return {"summary": summary, "responses": responses, **fields}
 
 

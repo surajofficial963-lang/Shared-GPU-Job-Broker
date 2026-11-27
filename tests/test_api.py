@@ -118,3 +118,37 @@ class ApiTest(unittest.TestCase):
             updated = client.get("/metrics", headers=self.metrics).data
             self.assertIn(b"broker_job_queue_wait_seconds_count" + labels + b" 2", updated)
             self.assertIn(b"broker_job_queue_wait_seconds_sum" + labels + b" 330", updated)
+
+    def test_api_rate_limit_and_cooldown_are_per_credential(self):
+        from unittest.mock import patch
+
+        with patch("broker.rate_limit.monotonic", return_value=10) as clock:
+            for _ in range(30):
+                self.assertEqual(self.client.get("/queue", headers=self.operator).status_code, 200)
+                self.assertEqual(self.client.get("/nodes", headers=self.operator).status_code, 200)
+            blocked = self.client.get("/queue", headers=self.operator)
+            self.assertEqual(blocked.status_code, 429)
+            self.assertEqual(blocked.headers["Retry-After"], "120")
+            self.assertEqual(blocked.json["retry_after_seconds"], 120)
+            self.assertEqual(self.client.get("/queue", headers=self.team).status_code, 200)
+            self.assertEqual(self.client.get("/healthz").status_code, 200)
+            self.assertEqual(self.client.get("/metrics", headers=self.metrics).status_code, 200)
+
+            clock.return_value = 129.1
+            self.assertEqual(self.client.get("/nodes", headers=self.operator).headers["Retry-After"], "1")
+            clock.return_value = 130
+            self.assertEqual(self.client.get("/queue", headers=self.operator).status_code, 200)
+
+    def test_completion_histogram_counts_success_once_and_includes_wait(self):
+        broker = self.app.extensions["broker"]
+        broker.provider.launch_node = lambda gpus, now, attempt: (now + 330, False)
+        first, _ = broker.submit("speech", 2, 60, "normal", "first")
+        broker.advance_by(390)
+        self.assertTrue(broker.finish(first, "succeeded"))
+        second, _ = broker.submit("speech", 2, 60, "normal", "second")
+        self.assertTrue(broker.finish(second, "cancelled"))
+
+        metrics = self.client.get("/metrics", headers=self.metrics).data
+        labels = b'{gpu_type="gpu-m",team="speech"}'
+        self.assertIn(b"broker_job_completion_time_seconds_count" + labels + b" 1", metrics)
+        self.assertIn(b"broker_job_completion_time_seconds_sum" + labels + b" 390", metrics)
