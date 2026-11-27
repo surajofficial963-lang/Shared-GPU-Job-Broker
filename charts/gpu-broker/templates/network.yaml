@@ -16,7 +16,7 @@ spec:
       ports:
         - protocol: TCP
           port: 8080
-  {{- if .Values.clickhouse.url }}
+  {{- if or .Values.postgres.egressCIDR .Values.clickhouse.url }}
   egress:
     - to:
         - namespaceSelector:
@@ -30,12 +30,22 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
+    {{- with .Values.postgres.egressCIDR }}
+    - to:
+        - ipBlock:
+            cidr: {{ . | quote }}
+      ports:
+        - protocol: TCP
+          port: {{ $.Values.postgres.port }}
+    {{- end }}
+    {{- if .Values.clickhouse.url }}
     - to:
         - ipBlock:
             cidr: {{ required "clickhouse.egressCIDR is required when archiving is enabled" .Values.clickhouse.egressCIDR | quote }}
       ports:
         - protocol: TCP
           port: {{ .Values.clickhouse.port }}
+    {{- end }}
   {{- else }}
   egress: []
   {{- end }}

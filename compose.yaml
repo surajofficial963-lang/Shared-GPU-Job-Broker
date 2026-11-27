@@ -11,19 +11,21 @@ services:
       BROKER_RATE_LIMIT_REQUESTS: "${BROKER_RATE_LIMIT_REQUESTS:-60}"
       BROKER_RATE_LIMIT_WINDOW_SECONDS: "${BROKER_RATE_LIMIT_WINDOW_SECONDS:-60}"
       BROKER_RATE_LIMIT_COOLDOWN_SECONDS: "${BROKER_RATE_LIMIT_COOLDOWN_SECONDS:-120}"
+      BROKER_DATABASE_URL: "host=postgres dbname=broker user=broker sslmode=disable"
+      PGPASSWORD: ${BROKER_POSTGRES_PASSWORD:?Set BROKER_POSTGRES_PASSWORD}
       CLICKHOUSE_URL: http://clickhouse:8123
       CLICKHOUSE_USER: broker
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_BROKER_PASSWORD:?Set CLICKHOUSE_BROKER_PASSWORD}
       CLICKHOUSE_ALLOW_HTTP: "1"
-    volumes:
-      - broker-data:/data
     read_only: true
     tmpfs:
       - /tmp
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
-    networks: [archive, monitoring]
+    networks: [archive, monitoring, database]
     depends_on:
+      postgres:
+        condition: service_healthy
       clickhouse:
         condition: service_healthy
     healthcheck:
@@ -31,6 +33,26 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+
+  postgres:
+    image: postgres:17-alpine@sha256:f9cf3e1f0066f0eb0c48707d864f0ac5941e9ff454a072077d97a4d278d07d73
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?Set POSTGRES_ADMIN_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+      BROKER_POSTGRES_PASSWORD: ${BROKER_POSTGRES_PASSWORD:?Set BROKER_POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./ops/postgres-init.sh:/docker-entrypoint-initdb.d/01-broker.sh:ro
+    networks: [database]
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          PGPASSWORD="$$BROKER_POSTGRES_PASSWORD" psql -qAt -h 127.0.0.1 -U broker -d broker -c 'SELECT 1'
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   clickhouse:
     image: clickhouse/clickhouse-server:26.8.48.11@sha256:e7e582227e531fddb91be850643999603332ee3199139c9b00aab867aeb9749c
@@ -89,9 +111,11 @@ networks:
   archive:
     internal: true
   monitoring: {}
+  database:
+    internal: true
 
 volumes:
-  broker-data:
+  postgres-data:
   clickhouse-data:
   prometheus-data:
   grafana-data:

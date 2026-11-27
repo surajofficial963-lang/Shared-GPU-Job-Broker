@@ -102,6 +102,5 @@ def archive_once(store, archive, limit=500):
                 db.executemany(f"DELETE FROM {table} WHERE id = ?", [(row["id"],) for row in rows])
             total += len(rows)
     if total:
-        with store.session(write=True) as db:
-            db.execute("PRAGMA incremental_vacuum(128)")
+        store.reclaim_archived_space()
     return total

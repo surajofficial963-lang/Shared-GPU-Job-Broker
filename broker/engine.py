@@ -140,7 +140,7 @@ class Broker:
         # Aging promotes a job one priority level every 30 minutes.
         for job in db.execute(
             """SELECT * FROM jobs WHERE status = 'queued'
-               ORDER BY max(0, priority - (? - submitted) / 1800), submitted, rowid""", (now,)
+               ORDER BY greatest(0, priority - (? - submitted) / 1800), submitted, rowid""", (now,)
         ).fetchall():
             # Keep an accepted launch's promised capacity available to its job.
             node = db.execute(
@@ -148,7 +148,7 @@ class Broker:
                    FROM nodes n LEFT JOIN jobs j ON j.node_id = n.id AND j.status = 'running'
                    WHERE n.ended IS NULL AND n.state = 'ready' AND n.team = ?
                    AND (n.reserved_job IS NULL OR n.reserved_job = ?)
-                   GROUP BY n.id HAVING free >= ?
+                   GROUP BY n.id HAVING n.gpus - coalesce(sum(j.gpus), 0) >= ?
                    ORDER BY n.reserved_job IS NULL, free, n.launched, n.rowid LIMIT 1""",
                 (job["team"], job["id"], job["gpus"]),
             ).fetchone()
@@ -179,7 +179,7 @@ class Broker:
                    SELECT j.* FROM jobs j LEFT JOIN team_load t ON t.team = j.team
                    WHERE j.status = 'queued' AND NOT EXISTS
                    (SELECT 1 FROM nodes n WHERE n.ended IS NULL AND n.reserved_job = j.id)
-                   ORDER BY max(0, j.priority - (? - j.submitted) / 1800),
+                   ORDER BY greatest(0, j.priority - (? - j.submitted) / 1800),
                             coalesce(t.live, 0), j.submitted, j.rowid LIMIT 1""", (now,)
             ).fetchone()
             if job is None:
@@ -195,7 +195,7 @@ class Broker:
             db.execute(
                 """INSERT INTO nodes(id, team, gpus, hourly_cents, launched, ready_at,
                    boot_failure, state, reserved_job) VALUES (?, ?, ?, ?, ?, ?, ?, 'booting', ?)""",
-                (uuid.uuid4().hex, job["team"], gpus, TYPES[gpus], now, ready_at, failure, job["id"]),
+                (uuid.uuid4().hex, job["team"], gpus, TYPES[gpus], now, ready_at, int(failure), job["id"]),
             )
 
     def _next_event(self, db):
@@ -241,8 +241,8 @@ class Broker:
 
     def listing(self, kind, limit=100, offset=0, team=None):
         queries = {
-            "jobs": "SELECT * FROM jobs WHERE status = 'queued' AND (? IS NULL OR team = ?) ORDER BY priority, submitted, rowid",
-            "nodes": "SELECT * FROM nodes WHERE ended IS NULL AND (? IS NULL OR team = ?) ORDER BY launched, rowid",
+            "jobs": "SELECT * FROM jobs WHERE status = 'queued' AND (CAST(? AS TEXT) IS NULL OR team = ?) ORDER BY priority, submitted, rowid",
+            "nodes": "SELECT * FROM nodes WHERE ended IS NULL AND (CAST(? AS TEXT) IS NULL OR team = ?) ORDER BY launched, rowid",
         }
         with self.store.session() as db:
             return [dict(row) for row in db.execute(queries[kind] + " LIMIT ? OFFSET ?", (team, team, limit, offset))]
@@ -257,7 +257,7 @@ class Broker:
             for table, start_column in (("jobs", "started"), ("nodes", "launched")):
                 rows = [dict(row) for row in db.execute(
                     f"""SELECT * FROM {table} WHERE {start_column} < ? AND (ended IS NULL OR ended > ?)
-                        AND (? IS NULL OR team = ?)""",
+                        AND (CAST(? AS TEXT) IS NULL OR team = ?)""",
                     (end, begin, team, team),
                 )]
                 found = {row["id"]: row for row in rows}

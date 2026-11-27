@@ -15,6 +15,7 @@ from werkzeug.exceptions import HTTPException
 from .archive import ArchiveUnavailable, ClickHouseArchive, archive_once
 from .engine import PRIORITIES, Broker, KeyConflict
 from .openapi import specification
+from .postgres import PostgresStore, StorageUnavailable
 from .queue_metrics import JobTimingCollector
 from .rate_limit import RateLimiter
 from .store import Store, retention_cutoff
@@ -31,7 +32,8 @@ def create_app(config=None):
     app = Flask(__name__)
     app.config.update(
         MAX_CONTENT_LENGTH=8192,
-        DB_PATH=os.getenv("BROKER_DB", "broker.db"),
+        DB_PATH=os.getenv("BROKER_DB", ""),
+        DATABASE_URL=os.getenv("BROKER_DATABASE_URL", ""),
         API_TOKEN=os.getenv("BROKER_API_TOKEN", ""),
         METRICS_TOKEN=os.getenv("BROKER_METRICS_TOKEN", ""),
         TEAM_TOKENS=os.getenv("BROKER_TEAM_TOKENS", "{}"),
@@ -75,7 +77,12 @@ def create_app(config=None):
         settings["ARCHIVE_URL"], settings["ARCHIVE_USER"], settings["ARCHIVE_PASSWORD"],
         allow_http=settings["ARCHIVE_ALLOW_HTTP"],
     ) if settings["ARCHIVE_URL"] else None
-    store = Store(settings["DB_PATH"], settings["INITIAL_TIME"])
+    if settings["DATABASE_URL"]:
+        store = PostgresStore(settings["DATABASE_URL"], settings["INITIAL_TIME"])
+    elif settings["DB_PATH"]:
+        store = Store(settings["DB_PATH"], settings["INITIAL_TIME"])
+    else:
+        raise ValueError("Set BROKER_DATABASE_URL to connect to PostgreSQL")
     broker = Broker(
         store, settings["IDLE_SECONDS"], archive=archive,
         queue_timeout_seconds=settings["QUEUE_TIMEOUT_SECONDS"],
@@ -99,7 +106,7 @@ def create_app(config=None):
             while True:
                 try:
                     archive_count.inc(archive_once(store, archive))
-                except (ArchiveUnavailable, sqlite3.Error):
+                except (ArchiveUnavailable, StorageUnavailable, sqlite3.Error):
                     archive_errors.inc()
                     app.logger.warning("Archive pass failed; pending data will be retried")
                 time.sleep(settings["ARCHIVE_INTERVAL"])
@@ -170,6 +177,7 @@ def create_app(config=None):
         return {"error": "Idempotency key already used with a different job"}, 409
 
     @app.errorhandler(ArchiveUnavailable)
+    @app.errorhandler(StorageUnavailable)
     @app.errorhandler(sqlite3.OperationalError)
     def unavailable(_):
         return {"error": "Storage temporarily unavailable"}, 503
@@ -220,7 +228,7 @@ def create_app(config=None):
     def ready():
         with store.session() as db:
             broker.now(db)
-            if not os.access(Path(store.path).parent, os.W_OK):
+            if isinstance(store, Store) and not os.access(Path(store.path).parent, os.W_OK):
                 abort(503)
         return {"status": "ready"}
 
