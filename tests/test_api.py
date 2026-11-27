@@ -92,3 +92,29 @@ class ApiTest(unittest.TestCase):
         with self.client.get("/docs/swagger-ui-bundle.js") as asset:
             self.assertEqual(asset.status_code, 200)
         self.assertEqual(self.client.get("/queue").status_code, 401)
+
+    def test_queue_wait_metrics_use_allocated_node_type_and_survive_restart(self):
+        broker = self.app.extensions["broker"]
+        broker.provider.launch_node = lambda gpus, now, attempt: (now + 330, False)
+        result = self.client.post("/jobs", headers=self.operator, json=self.job)
+        self.assertEqual(result.status_code, 201)
+        broker.advance_by(330)
+        self.client.post("/jobs", headers=dict(self.operator, **{"Idempotency-Key": "second"}), json=self.job)
+        labels = b'{gpu_type="gpu-m",team="speech"}'
+        metrics = self.client.get("/metrics", headers=self.metrics).data
+        self.assertIn(b"broker_job_queue_wait_seconds_count" + labels + b" 2", metrics)
+        self.assertIn(b"broker_job_queue_wait_seconds_sum" + labels + b" 330", metrics)
+
+        # Simulate upgrade from a database without stored queue-wait aggregates.
+        with broker.store.session(write=True) as db:
+            db.execute("DROP TABLE queue_wait_buckets")
+        settings = {
+            key: self.app.config[key]
+            for key in ("TESTING", "API_TOKEN", "METRICS_TOKEN", "TEAM_TOKENS", "DB_PATH", "INITIAL_TIME")
+        }
+        settings["ARCHIVE_URL"] = ""
+        for _ in range(2):
+            client = create_app(settings).test_client()
+            updated = client.get("/metrics", headers=self.metrics).data
+            self.assertIn(b"broker_job_queue_wait_seconds_count" + labels + b" 2", updated)
+            self.assertIn(b"broker_job_queue_wait_seconds_sum" + labels + b" 330", updated)

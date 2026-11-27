@@ -30,7 +30,7 @@ set -a
 set +a
 ```
 
-The API is at `http://127.0.0.1:8080`. Open Grafana at `http://127.0.0.1:3000`, sign in as `admin` with the generated password, and open **GPU Broker → Shared GPU Job Broker**. The dashboard shows per-route request p90/p95, requests per second, HTTP 5xx, the last 24 simulated hours of node costs, queue depth, live nodes, and archival backlog/errors. Prometheus needs multiple scrapes and request traffic before rate and percentile panels populate.
+The API is at `http://127.0.0.1:8080`. Open Grafana at `http://127.0.0.1:3000`, sign in as `admin` with the generated password, and open **GPU Broker → Shared GPU Job Broker**. The dashboard shows separate panels for job queue-wait p90 and p95, separate per-route HTTP latency p90 and p95, requests per second, HTTP 5xx, the last 24 simulated hours of node costs, queue depth, live nodes, and archival backlog/errors. Use **Team** and **GPU node type** to filter the queue-wait panels. Their choices come from Prometheus and reflect the node type actually used, such as `gpu-m` for a 2-GPU job placed on a 4-GPU node. Queue wait runs from submission to start and uses approximate cumulative histogram percentiles. Jobs enter the histogram when they start. Existing records still in SQLite are backfilled once, and the aggregate survives restart and archival. HTTP rate and latency panels require request traffic and several scrapes.
 
 ```sh
 curl -fsS http://127.0.0.1:8080/jobs \

@@ -15,6 +15,7 @@ from werkzeug.exceptions import HTTPException
 from .archive import ArchiveUnavailable, ClickHouseArchive, archive_once
 from .engine import PRIORITIES, Broker, KeyConflict
 from .openapi import specification
+from .queue_metrics import QueueWaitCollector
 from .store import Store, retention_cutoff
 
 
@@ -71,6 +72,7 @@ def create_app(config=None):
     app.extensions["broker"] = broker
 
     registry = CollectorRegistry()
+    registry.register(QueueWaitCollector(store))
     calls = Counter("broker_http_requests", "HTTP responses", ["method", "route", "status"], registry=registry)
     duration = Histogram("broker_http_request_duration_seconds", "HTTP handler duration", ["route"], registry=registry)
     cost = Gauge("broker_cost_usd_24h", "Estimated node charges in the last 24 simulated hours", registry=registry)
