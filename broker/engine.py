@@ -100,7 +100,7 @@ class Broker:
         if job["node_id"]:
             if status == "succeeded":
                 node_gpus = db.execute("SELECT gpus FROM nodes WHERE id = ?", (job["node_id"],)).fetchone()[0]
-                record_timing(db, "completion_time_buckets", job["team"], node_gpus, now - job["submitted"])
+                record_timing(db, "runtime_buckets", job["team"], node_gpus, now - job["started"])
             db.execute(
                 """UPDATE nodes SET idle_since = ? WHERE id = ?
                    AND NOT EXISTS (SELECT 1 FROM jobs WHERE status = 'running' AND node_id = ?)""",

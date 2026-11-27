@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS queue_wait_buckets (
     seconds INTEGER NOT NULL,
     PRIMARY KEY (team, node_gpus, bucket)
 );
-CREATE TABLE IF NOT EXISTS completion_time_buckets (
+CREATE TABLE IF NOT EXISTS runtime_buckets (
     team TEXT NOT NULL,
     node_gpus INTEGER NOT NULL,
     bucket INTEGER NOT NULL,
@@ -106,13 +106,13 @@ class Store:
                        FROM jobs j JOIN nodes n ON n.id = j.node_id WHERE j.started IS NOT NULL"""
                 ):
                     record_timing(db, "queue_wait_buckets", job["team"], job["gpus"], job["wait_seconds"])
-            if db.execute("SELECT 1 FROM completion_time_buckets LIMIT 1").fetchone() is None:
+            if db.execute("SELECT 1 FROM runtime_buckets LIMIT 1").fetchone() is None:
                 for job in db.execute(
-                    """SELECT j.team, n.gpus, j.ended - j.submitted AS completion_seconds
+                    """SELECT j.team, n.gpus, j.ended - j.started AS runtime_seconds
                        FROM jobs j JOIN nodes n ON n.id = j.node_id WHERE j.status = 'succeeded'"""
                 ):
-                    record_timing(db, "completion_time_buckets", job["team"], job["gpus"],
-                                  job["completion_seconds"])
+                    record_timing(db, "runtime_buckets", job["team"], job["gpus"],
+                                  job["runtime_seconds"])
 
     @contextmanager
     def session(self, write=False):

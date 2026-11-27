@@ -103,7 +103,7 @@
             "uid": "broker-prometheus"
           },
           "legendFormat": "p50 {{team}} / {{gpu_type}}",
-          "expr": "histogram_quantile(0.50, sum by (le, team, gpu_type) (broker_job_completion_time_seconds_bucket{team=~\"$team\",gpu_type=~\"$gpu_type\"}))"
+          "expr": "histogram_quantile(0.50, sum by (le, team, gpu_type) (broker_job_runtime_seconds_bucket{team=~\"$team\",gpu_type=~\"$gpu_type\"}))"
         },
         {
           "refId": "B",
@@ -112,7 +112,7 @@
             "uid": "broker-prometheus"
           },
           "legendFormat": "p90 {{team}} / {{gpu_type}}",
-          "expr": "histogram_quantile(0.90, sum by (le, team, gpu_type) (broker_job_completion_time_seconds_bucket{team=~\"$team\",gpu_type=~\"$gpu_type\"}))"
+          "expr": "histogram_quantile(0.90, sum by (le, team, gpu_type) (broker_job_runtime_seconds_bucket{team=~\"$team\",gpu_type=~\"$gpu_type\"}))"
         },
         {
           "refId": "C",
@@ -121,10 +121,10 @@
             "uid": "broker-prometheus"
           },
           "legendFormat": "p95 {{team}} / {{gpu_type}}",
-          "expr": "histogram_quantile(0.95, sum by (le, team, gpu_type) (broker_job_completion_time_seconds_bucket{team=~\"$team\",gpu_type=~\"$gpu_type\"}))"
+          "expr": "histogram_quantile(0.95, sum by (le, team, gpu_type) (broker_job_runtime_seconds_bucket{team=~\"$team\",gpu_type=~\"$gpu_type\"}))"
         }
       ],
-      "description": "Approximate cumulative percentiles from submission to successful completion, including queue wait and execution time."
+      "description": "Approximate cumulative percentiles from job start to successful completion."
     },
     {
       "id": 9,
@@ -454,5 +454,5 @@
       }
     ]
   },
-  "version": 2
+  "version": 3
 }
