@@ -1,4 +1,5 @@
 """Run against a disposable Compose stack. Verifies HTTP, archive, and metrics."""
+import base64
 import json
 import os
 import time
@@ -43,5 +44,23 @@ def main():
     print("Compose smoke passed: archived job retrieval, consistent costs, and metrics")
 
 
+def check_grafana(password):
+    credentials = base64.b64encode(f"admin:{password}".encode()).decode()
+    req = Request("http://127.0.0.1:3000/api/dashboards/uid/shared-gpu-broker",
+                  headers={"Authorization": f"Basic {credentials}"})
+    for _ in range(30):
+        try:
+            with urlopen(req, timeout=2) as response:
+                dashboard = json.load(response)["dashboard"]
+                assert len(dashboard["panels"]) == 6
+                print("Grafana dashboard provisioned")
+                return
+        except OSError:
+            time.sleep(1)
+    raise AssertionError("Grafana dashboard was not available")
+
+
 if __name__ == "__main__":
     main()
+    if os.getenv("GRAFANA_ADMIN_PASSWORD"):
+        check_grafana(os.environ["GRAFANA_ADMIN_PASSWORD"])

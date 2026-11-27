@@ -107,3 +107,9 @@ The input contains 494 rows. The replay normalizes explicit offsets to UTC, assu
 For seed 23, the 5-minute policy cost about **$194.58 less** and had lower p95 waits for every team. Shorter idle time frees scarce node slots when another team is waiting. The very long tails for `vision` and `platform` show the impact of queue bursts, team isolation, and the shared 10-node cap. This is one seeded comparison. The replay prints p90, p99, GPU-hours, and team costs as well.
 
 The implementation excludes interruptible nodes, job preemption, real GPU execution, and multi-replica scheduling. A next scheduling experiment would compare balancing by live node count with balancing by allocated GPUs at each effective priority. The fake provider and manually advanced clock are intentional exercise constraints. Codex assisted with implementation, tests, delivery configuration, and trace analysis.
+
+### Work log
+
+The Codex implementation and verification session ran approximately 12:19–12:36 IST on 27 November 2026, about 17 minutes. This estimate covers the coding session with AI assistance. It excludes any separate time spent by the candidate.
+
+Local checks covered the tests on Python 3.10 and 3.14, reproducible trace output, the dependency advisory audit, Compose configuration, and Helm lint and rendering. An end-to-end run with Gunicorn and a local ClickHouse server verified archival, historical cost reports, and restart recovery. The Docker stack and Kubernetes rollout require their respective runtimes. CI includes a Compose build, archival smoke test, and Grafana provisioning check.
